@@ -9,6 +9,11 @@ class AaaayyyyyBot(discord.Client):
         self.logger = logger
         if logger is not None:
             logger.info('Log started')
+        #setup intents
+        if 'intents' not in options:
+            options['intents'] = discord.Intents.default()
+        options['intents'].messages = True
+        options['intents'].members = True
         discord.Client.__init__(self, **options)
         return
     def calc_target_list_key(self, message)->tuple:
@@ -29,8 +34,6 @@ class AaaayyyyyBot(discord.Client):
         #calc target list
         targets = set()
         if key in self.targets:
-            print(self.targets[key])
-            print(set(map(lambda mem: mem.mention, message.channel.members)))
             targets = self.targets[key] & set(map(lambda mem: mem.mention, message.channel.members))
         #log action
         if logger is not None:
