@@ -2,11 +2,11 @@ import logging
 import discord
 
 class AaaayyyyyBot(discord.Client):
-    def __init__(self, logger:logging.Logger=None, ping_timeout:float=None, command_timeout:float=None, **options):
+    def __init__(self, ping_timeout:float=None, command_timeout:float=None, **options):
         self.ping_timeout = ping_timeout
         self.command_timeout = command_timeout
         self.targets = dict()
-        self.logger = logger
+        self.logger = logging.getLogger('aaaayyyyy_bot')
         if logger is not None:
             logger.info('Log started')
         #setup intents
@@ -14,21 +14,27 @@ class AaaayyyyyBot(discord.Client):
             options['intents'] = discord.Intents.default()
         options['intents'].messages = True
         options['intents'].members = True
+        options['intents'].guilds = True
         discord.Client.__init__(self, **options)
         return
-    def calc_target_list_key(self, message)->tuple:
-        '''Calculate the target list key to use for the given message'''
-        if isinstance(message.channel, discord.TextChannel):
-            return (message.guild.id, message.channel.id)
-        if isinstance(message.channel, discord.GroupChannel):
-            return ('group', message.channel.id)
-        if isinstance(message.channel, discord.DMChannel):
-            return ('dm', message.channel.id)
+    def get_target_list_key(self, arg)->tuple:
+        '''Calculate the target list key to use for the given channel,
+or set of existing keys if given a guild or member'''
+        if isinstance(arg, discord.TextChannel):
+            return (arg.guild.id, arg.id)
+        if isinstance(arg, discord.GroupChannel):
+            return ('group', arg.id)
+        if isinstance(arg, discord.DMChannel):
+            return ('dm', arg.id)
+        if isinstance(arg, discord.Guild):
+            return set(filter(lambda key: key[0] == arg.id, self.targets))
+        if isinstance(arg, discord.Member):
+            return set(filter(lambda key: key[0] == arg.guild.id and arg.mention in self.targets[key], self.targets))
         return None
     async def ping(self, message):
         '''Trigger a ping with the given message'''
         #calc target list key
-        key = self.calc_target_list_key(message)
+        key = self.get_target_list_key(message.channel)
         if self.logger is not None:
             self.logger.debug(f'Fetching target list for {key}')
         #calc target list
@@ -37,14 +43,16 @@ class AaaayyyyyBot(discord.Client):
             targets = self.targets[key] & set(map(lambda mem: mem.mention, message.channel.members))
         #log action
         if logger is not None:
-            logger.info('Pinging "'+ '", "'.join(targets) + f'" in channel "{message.channel}" in guild "{message.guild}"')
+            logger.info('Pinging "' + '", "'.join(targets)
+                        + f'" in channel "{message.channel}" in guild "{message.guild}"')
         #ping targets
-        await message.channel.send(f'Aaaayyyyy! {" ".join(targets)}', delete_after=self.ping_timeout, reference=message, mention_author=False)
+        await message.channel.send(f'Aaaayyyyy! {" ".join(targets)}', delete_after=self.ping_timeout,
+                                   reference=message, mention_author=False)
         return
     async def command(self, message):
         '''Add or remove targets mentioned in the given message'''
         #get key
-        key = self.calc_target_list_key(message)
+        key = self.get_target_list_key(message.channel)
         if self.logger is not None:
             self.logger.debug(f'Modifying target list for {key}')
         if key not in self.targets:
@@ -71,16 +79,21 @@ class AaaayyyyyBot(discord.Client):
         #log actions
         if self.logger is not None:
             if len(to_remove) > 0:
-                self.logger.info(f'Removed "' + '", "'.join(map(lambda user: user.name, to_remove)) + f'" from target list for channel "{message.channel}" in guild "{message.guild}"')
+                self.logger.info(f'Removed "' + '", "'.join(map(lambda user: user.name, to_remove))
+                                 + f'" from target list for channel "{message.channel}" in guild "{message.guild}"')
             if len(to_add) > 0:
-                self.logger.info(f'Added "' + '", "'.join(map(lambda user: user.name, to_add)) + f'" to target list for channel "{message.channel}" in guild "{message.guild}"')
+                self.logger.info(f'Added "' + '", "'.join(map(lambda user: user.name, to_add))
+                                 + f'" to target list for channel "{message.channel}" in guild "{message.guild}"')
         #reply to command
         reply = list()
         if len(to_remove) > 0:
-            reply.append(f'Removed `{"`, `".join(map(lambda user: user.name, to_remove))}` from target list')
+            reply.append('Removed `' + '`, `'.join(map(lambda user: user.name, to_remove))
+                         + '` from target list')
         if len(to_add) > 0:
-            reply.append(f'Added `{"`, `".join(map(lambda user: user.name, to_add))}` to target list')
-        await message.channel.send('\n'.join(reply), delete_after=self.command_timeout, reference=message, mention_author=False)
+            reply.append('Added `' + '`, `'.join(map(lambda user: user.name, to_add))
+                         + '` to target list')
+        await message.channel.send('\n'.join(reply), delete_after=self.command_timeout,
+                                   reference=message, mention_author=False)
         return
     async def on_message(self, message):
         if message.author != self.user:
@@ -89,6 +102,48 @@ class AaaayyyyyBot(discord.Client):
             elif 'a' in message.content or 'A' in message.content:
                 await self.ping(message)
         return
+    async def on_guild_channel_delete(self, channel):
+        key = self.get_target_list_key(channel)
+        if key in self.targets:
+            del self.targets[key]
+            if self.logger is not None:
+                self.logger.info(f'Cleared targets for channel "{channel.name}" in guild "{channel.guild.name}"')
+        return
+    async def on_guild_remove(self, guild):
+        keys = self.get_target_list_key(guild)
+        if len(keys) > 0:
+            for key in keys:
+                del self.targets[key]
+            if self.logger is not None:
+                self.logger.info('Cleared targets for channels "'
+                                 + '", "'.join(map(lambda key: guild.get_channel(key[1]).name, keys))
+                                 + f'" in guild "{guild.name}"')
+        return
+    async def on_private_channel_delete(self, channel):
+        key = self.get_target_list_key(channel)
+        if key in self.targets:
+            del self.targets[key]
+            if self.logger is not None:
+                self.logger.info(f'Cleared targets for channel "{channel.name}"')
+        return
+    async def on_member_remove(self, member):
+        keys = self.get_target_list_key(member)
+        if len(keys) > 0:
+            for key in keys:
+                self.targets[key].remove(member.mention)
+            if self.logger is not None:
+                self.logger.info(f'Removed target "{member.name}" from channels "'
+                                 + '", "'.join(map(lambda key: member.guild.get_channel(key[1]).name, keys))
+                                 + f'" in guild "{member.guild.name}"')
+        return
+    async def on_group_remove(self, channel, user):
+        key = self.get_target_list_key(channel)
+        if key in self.targets and user.mention in self.targets[key]:
+            self.targets[key].remove(user.mention)
+            if self.logger is not None:
+                self.logger.info(f'Removed target "{user.name}" from group channel "{channel.name}"')
+        return
+            
 if __name__ == '__main__':
     import sys
     import dotenv
@@ -108,5 +163,5 @@ if __name__ == '__main__':
     #load token
     dotenv.load_dotenv()
     token = os.getenv('BOT_TOKEN')
-    bot = AaaayyyyyBot(logger)
+    bot = AaaayyyyyBot()
     bot.run(token)
