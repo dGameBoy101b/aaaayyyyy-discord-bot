@@ -175,7 +175,6 @@ or set of existing keys if given a guild or member'''
 if __name__ == '__main__':
     import sys
     import dotenv
-    import os
     #setup logging
     formatter = logging.Formatter('[{asctime}]<{name}>{levelname}: {message}', style='{')
     file_handler = logging.FileHandler('aaaayyyyy_bot.log')
@@ -189,7 +188,14 @@ if __name__ == '__main__':
     logger.addHandler(stream_handler)
     logger.setLevel(logging.DEBUG)
     #load token
-    dotenv.load_dotenv()
-    token = os.getenv('BOT_TOKEN')
-    bot = AaaayyyyyBot()
-    bot.run(token)
+    try:
+        try:
+            token = dotenv.dotenv_values('./.env')['BOT_TOKEN']
+        except KeyError:
+            logger.critical('No bot token found')
+            sys.exit('No bot token found')
+        bot = AaaayyyyyBot()
+        bot.run(token)
+    except Exception as x:
+        logger.exception(x)
+        sys.exit(x)
