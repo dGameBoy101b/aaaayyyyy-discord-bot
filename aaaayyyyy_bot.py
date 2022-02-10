@@ -76,13 +76,19 @@ or set of existing keys if given a guild or member'''
         targets = set()
         if key in self.targets:
             targets = self.targets[key] & set(map(lambda member: member.id, message.channel.members))
-        #log action
-        self.logger.info('Pinging "' + '", "'.join(map(lambda user: f'{user.name}#{user.discriminator}',
+        #ping targets
+        try:
+            await message.channel.send('Aaaayyyyy! ' + ' '.join(map(lambda user_id: self.get_user(user_id).mention, targets)),
+                                       delete_after=self.ping_timeout, reference=message, mention_author=False)
+        except discord.Forbidden:
+            self.logger.warning(f'Insufficient permissions to ping in channel "{message.channel}" in guild "{message.guild}"')
+            return
+        except discord.HTTPException:
+            self.logger.warning(f'Failed to ping in channel "{message.channel}" in guild "{message.guild}"')
+            return
+        self.logger.info('Pinged "' + '", "'.join(map(lambda user: f'{user.name}#{user.discriminator}',
                                                        map(lambda user_id: self.get_user(user_id), targets)))
                     + f'" in channel "{message.channel}" in guild "{message.guild}"')
-        #ping targets
-        await message.channel.send('Aaaayyyyy! ' + ' '.join(map(lambda user_id: self.get_user(user_id).mention, targets)),
-                                   delete_after=self.ping_timeout, reference=message, mention_author=False)
         return
     async def command(self, message):
         '''Add or remove targets mentioned in the given message'''
@@ -124,8 +130,13 @@ or set of existing keys if given a guild or member'''
         if len(to_add) > 0:
             reply.append('Added `' + '`, `'.join(map(lambda user: f'{user.name}#{user.discriminator}', to_add))
                          + '` to target list')
-        await message.channel.send('\n'.join(reply), delete_after=self.command_timeout,
-                                   reference=message, mention_author=False)
+        try:
+            await message.channel.send('\n'.join(reply), delete_after=self.command_timeout,
+                                       reference=message, mention_author=False)
+        except discord.Forbidden:
+            self.logger.warning(f'Insufficient permissions to respond to command in channel "{message.channel}" in guild "{message.guild}"')
+        except discord.HTTPException:
+            self.logger.warning(f'Failed to respond to command in channel "{message.channel}" in guild "{message.guild}"')
         return
     async def on_message(self, message):
         if message.author == self.user:
