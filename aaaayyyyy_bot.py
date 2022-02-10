@@ -39,13 +39,14 @@ or set of existing keys if given a guild or member'''
         #calc target list
         targets = set()
         if key in self.targets:
-            targets = self.targets[key] & set(map(lambda mem: mem.mention, message.channel.members))
+            targets = self.targets[key] & set(map(lambda member: member.id, message.channel.members))
         #log action
-        self.logger.info('Pinging "' + '", "'.join(map(lambda mention: mention, targets))
+        self.logger.info('Pinging "' + '", "'.join(map(lambda user: f'{user.name}#{user.discriminator}',
+                                                       map(lambda user_id: self.get_user(user_id), targets)))
                     + f'" in channel "{message.channel}" in guild "{message.guild}"')
         #ping targets
-        await message.channel.send(f'Aaaayyyyy! {" ".join(targets)}', delete_after=self.ping_timeout,
-                                   reference=message, mention_author=False)
+        await message.channel.send('Aaaayyyyy! ' + ' '.join(map(lambda user_id: self.get_user(user_id).mention, targets)),
+                                   delete_after=self.ping_timeout, reference=message, mention_author=False)
         return
     async def command(self, message):
         '''Add or remove targets mentioned in the given message'''
@@ -61,13 +62,13 @@ or set of existing keys if given a guild or member'''
         for user in message.mentions:
             if user == self.user:
                 continue
-            if user.mention in self.targets[key]:
+            if user.id in self.targets[key]:
                 to_remove.add(user)
             else:
                 to_add.add(user)
         #add/remove targets
-        self.targets[key] -= set(map(lambda user: user.mention, to_remove))
-        self.targets[key] |= set(map(lambda user: user.mention, to_add))
+        self.targets[key] -= set(map(lambda user: user.id, to_remove))
+        self.targets[key] |= set(map(lambda user: user.id, to_add))
         if len(self.targets[key]) < 1:
             del self.targets[key]
             if self.logger is not None:
