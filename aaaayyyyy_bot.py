@@ -205,7 +205,7 @@ if __name__ == '__main__':
         except KeyError:
             logger.critical('No bot token found')
             sys.exit('No bot token found')
-        bot = AaaayyyyyBot()
+        bot = AaaayyyyyBot(ping_timeout=10, command_timeout=100)
         bot.run(token)
     except Exception as x:
         logger.exception(x)
