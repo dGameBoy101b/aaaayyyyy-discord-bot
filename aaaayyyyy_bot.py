@@ -7,8 +7,8 @@ class AaaayyyyyBot(discord.Client):
         self.command_timeout = command_timeout
         self.targets = dict()
         self.logger = logging.getLogger('aaaayyyyy_bot')
-        if logger is not None:
-            logger.info('Log started')
+        self.logger.info(f'Ping timeout set to: {ping_timeout}')
+        self.logger.info(f'Command timeout set to: {command_timeout}')
         #setup intents
         if 'intents' not in options:
             options['intents'] = discord.Intents.default()
