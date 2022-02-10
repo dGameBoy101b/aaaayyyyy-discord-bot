@@ -2,13 +2,16 @@ import logging
 import discord
 
 class AaaayyyyyBot(discord.Client):
-    def __init__(self, ping_timeout:float=None, command_timeout:float=None, **options):
-        self.ping_timeout = ping_timeout
-        self.command_timeout = command_timeout
-        self.targets = dict()
+    def __init__(self, target_list_path:str='./targets.csv',
+                 ping_timeout:float=None, command_timeout:float=None, **options):
         self.logger = logging.getLogger('aaaayyyyy_bot')
+        self.ping_timeout = ping_timeout
         self.logger.info(f'Ping timeout set to: {ping_timeout}')
+        self.command_timeout = command_timeout
         self.logger.info(f'Command timeout set to: {command_timeout}')
+        self.target_list_path = target_list_path
+        self.logger.info(f'Target list path set to: "{target_list_path}"')
+        self.targets = self.load_target_list(target_list_path)
         #setup intents
         if 'intents' not in options:
             options['intents'] = discord.Intents.default()
@@ -16,6 +19,39 @@ class AaaayyyyyBot(discord.Client):
         options['intents'].members = True
         options['intents'].guilds = True
         discord.Client.__init__(self, **options)
+        return
+    def load_target_list(self, path:str)->dict:
+        '''Load a target list from the given file path'''
+        self.logger.info(f'Loading target list from "{path}"...')
+        target_list = dict()
+        try:
+            with open(path, mode='rt') as file:
+                while True:
+                    line = file.readline()
+                    if line == '':
+                        break
+                    key = line.partition(';')[0].split(',')
+                    key[1] = int(key[1])
+                    try:
+                        key[0] = int(key[0])
+                    except ValueError:
+                        pass
+                    key = tuple(key)
+                    user_ids = set(map(lambda user_id: int(user_id), line.partition(';')[2].split(',')))
+                    target_list[key] = user_ids
+                    self.logger.debug(f'Loaded {len(user_ids)} target(s) to list {key!r} from "{path}": {user_ids}')
+            self.logger.info(f'Loaded {len(target_list)} target list(s) from "{path}"')
+        except FileNotFoundError:
+            self.logger.warning(f'No file at "{path}" to load target list from')
+        return target_list
+    def save_target_list(self, path:str, target_list:dict):
+        '''Save the given target list to the given file path'''
+        self.logger.info(f'Saving target list to "{path}"...')
+        with open(path, mode='wt') as file:
+            for key in target_list:
+                file.write(f'{key[0]},{key[1]};' + ','.join(map(lambda target: f'{target}', target_list[key])) + '\n')
+                self.logger.debug(f'Saved {len(target_list[key])} target(s) for list {key} to "{path}": {target_list[key]}')
+        self.logger.info(f'Saved {len(target_list)} target list(s) to "{path}"')
         return
     def get_target_list_key(self, arg)->tuple:
         '''Calculate the target list key to use for the given channel,
@@ -71,8 +107,7 @@ or set of existing keys if given a guild or member'''
         self.targets[key] |= set(map(lambda user: user.id, to_add))
         if len(self.targets[key]) < 1:
             del self.targets[key]
-            if self.logger is not None:
-                self.logger.debug(f'Removed empty target list from {key}')
+            self.logger.debug(f'Removed empty target list from {key}')
         #log actions
         if len(to_remove) > 0:
             self.logger.info(f'Removed "' + '", "'.join(map(lambda user: f'{user.name}#{user.discriminator}', to_remove))
@@ -80,6 +115,7 @@ or set of existing keys if given a guild or member'''
         if len(to_add) > 0:
             self.logger.info(f'Added "' + '", "'.join(map(lambda user: f'{user.name}#{user.discriminator}', to_add))
                              + f'" to target list for channel "{message.channel}" in guild "{message.guild}"')
+        self.save_target_list(self.target_list_path, self.targets)
         #reply to command
         reply = list()
         if len(to_remove) > 0:
